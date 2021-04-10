@@ -214,6 +214,5 @@ exec_always feh --bg-scale ~/Pictures/uni.jpg
 
 # Exec firefox on startup
 exec firefox
-exec terminator
-exec keepasxc
+exec keepassxc
 exec compton -f
