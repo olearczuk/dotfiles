@@ -5,6 +5,7 @@ alias vim=nvim
 alias g=git
 alias gs='g status'
 alias gch='g checkout'
+alias gchm='gch master'
 alias gb='git branch'
 alias gbd='gb -D'
 alias gr='g reset'
@@ -14,4 +15,7 @@ alias gd='g diff'
 alias gc='g commit'
 alias gcm='gc -m'
 alias gca='gc --amend'
+alias gcan='gca --no-edit'
+alias gp='g push origin'
+alias gpo='g pull origin'
 
