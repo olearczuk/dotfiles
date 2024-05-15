@@ -91,7 +91,7 @@ vim.g.mapleader = ' '
 vim.g.maplocalleader = ' '
 
 -- Set to true if you have a Nerd Font installed
-vim.g.have_nerd_font = false
+vim.g.have_nerd_font = true
 
 -- disable netrw at the very start of your init.lua
 vim.g.loaded_netrw = 1
@@ -250,7 +250,7 @@ require('lazy').setup({
     version = '*',
     lazy = false,
     dependencies = {
-      'nvim-tree/nvim-web-devicons',
+      { 'nvim-tree/nvim-web-devicons', enabled = vim.g.have_nerd_font },
     },
     config = function()
       require('nvim-tree').setup {}
@@ -859,6 +859,18 @@ require('lazy').setup({
       --    - Incremental selection: Included, see `:help nvim-treesitter-incremental-selection-mod`
       --    - Show your current context: https://github.com/nvim-treesitter/nvim-treesitter-context
       --    - Treesitter + textobjects: https://github.com/nvim-treesitter/nvim-treesitter-textobjects
+    end,
+  },
+  {
+    'sindrets/diffview.nvim',
+    opts = {},
+    dependencies = {
+      { 'nvim-tree/nvim-web-devicons', enabled = vim.g.have_nerd_font },
+    },
+    config = function()
+      vim.keymap.set('n', '<leader>dvo', '<cmd>:DiffviewOpen<cr>', { desc = '[D]iff [V]iew [O]pen' })
+      vim.keymap.set('n', '<leader>dvc', '<cmd>:DiffviewClose<cr>', { desc = '[D]iff [V]iew [C]lose' })
+      vim.keymap.set('n', '<leader>dvh', '<cmd>:DiffviewFileHistory<cr>', { desc = '[D]iff [V]iew File [H]istory' })
     end,
   },
 
