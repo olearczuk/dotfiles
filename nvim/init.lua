@@ -885,7 +885,29 @@ require('lazy').setup({
       vim.keymap.set('n', '<leader>dvhc', '<cmd>:DiffviewFileHistory %<cr>', { desc = '[D]iff [V]iew File [H]istory [C]urrent file' })
     end,
   },
+  {
+    'nvim-neotest/neotest',
+    dependencies = {
+      'nvim-lua/plenary.nvim',
+      'nvim-neotest/nvim-nio',
+      'antoinemadec/FixCursorHold.nvim',
+      'rouge8/neotest-rust',
+      -- { 'nvim-tree/nvim-web-devicons', enabled = vim.g.have_nerd_font },
+    },
 
+    config = function()
+      vim.keymap.set('n', '<leader>rt', '<cmd>:lua require("neotest").run.run()<cr>', { desc = '[R]un [T]est' })
+      vim.keymap.set('n', '<leader>rta', '<cmd>:lua require("neotest").run.run(vim.fn.expand("%"))<cr>', { desc = '[R]un [T]est for [A]ll' })
+
+      require('neotest').setup {
+        adapters = {
+          require 'neotest-rust' {
+            args = { '--no-capture' },
+          },
+        },
+      }
+    end,
+  },
   -- Te following two comments only work if you have downloaded the kickstart repo, not just copy pasted the
   -- init.lua. If you want these files, they are in the repository, so you can just download them and
   -- place them in the correct locations.
