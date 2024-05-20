@@ -253,7 +253,12 @@ require('lazy').setup({
       { 'nvim-tree/nvim-web-devicons', enabled = vim.g.have_nerd_font },
     },
     config = function()
-      require('nvim-tree').setup {}
+      require('nvim-tree').setup {
+        update_focused_file = {
+          enable = true,
+          update_cwd = false,
+        },
+      }
       local api = require 'nvim-tree.api'
       vim.keymap.set('n', '<leader>t', api.tree.toggle, { desc = '[T]oggle nvim-tree' })
     end,
@@ -274,7 +279,13 @@ require('lazy').setup({
         topdelete = { text = '‾' },
         changedelete = { text = '~' },
       },
+      current_line_blame = true,
     },
+    config = function(_, opts)
+      vim.keymap.set('n', '<leader>gb', '<cmd>:Gitsigns blame_line<cr>', { desc = '[G]itsigns [B]lame line' })
+
+      require('gitsigns').setup(opts)
+    end,
   },
 
   -- NOTE: Plugins can also be configured to run Lua code when they are loaded.
@@ -871,6 +882,7 @@ require('lazy').setup({
       vim.keymap.set('n', '<leader>dvo', '<cmd>:DiffviewOpen<cr>', { desc = '[D]iff [V]iew [O]pen' })
       vim.keymap.set('n', '<leader>dvc', '<cmd>:DiffviewClose<cr>', { desc = '[D]iff [V]iew [C]lose' })
       vim.keymap.set('n', '<leader>dvh', '<cmd>:DiffviewFileHistory<cr>', { desc = '[D]iff [V]iew File [H]istory' })
+      vim.keymap.set('n', '<leader>dvhc', '<cmd>:DiffviewFileHistory %<cr>', { desc = '[D]iff [V]iew File [H]istory [C]urrent file' })
     end,
   },
 
