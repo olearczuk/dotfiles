@@ -595,6 +595,8 @@ require('lazy').setup({
 
         rust_analyzer = {},
 
+        pylsp = {},
+
         lua_ls = {
           -- cmd = {...},
           -- filetypes = { ...},
