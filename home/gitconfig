@@ -3,3 +3,5 @@
 	email = olearczuk.szymon@gmail.com
 [pager]
 	branch = false
+[push]
+	autoSetupRemote = true
