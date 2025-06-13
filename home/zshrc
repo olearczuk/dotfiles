@@ -1,5 +1,7 @@
 alias vim=nvim
 
+alias toplev=~/github/pmu-tools/toplev.py
+
 alias g=git
 alias gs='g status'
 alias gch='g checkout'
