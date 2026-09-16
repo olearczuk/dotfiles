@@ -19,6 +19,7 @@ alias gcan='gca --no-edit'
 alias gp='g push'
 alias gpf='gp --force'
 alias gpo='g pull origin'
+alias gcf='gc --fixup'
 
 
 export PATH="$HOME/.local/bin:$PATH"
