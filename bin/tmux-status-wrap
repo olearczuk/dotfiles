@@ -1,0 +1,72 @@
+#!/bin/sh
+# Re-flow the tmux window list across as many status lines as it needs.
+#
+# tmux never wraps the window list: once it outgrows the bar it is clipped (or
+# scrolled behind "<" / ">" markers), so with a dozen windows open the tail is
+# simply invisible. This packs the windows into rows itself, tags each window
+# with the row it belongs to (@srow), and grows `status` to that many lines.
+# status-format[0..4] in tmux.conf each draw only the windows tagged for their
+# own row, which is what produces the wrap.
+#
+# Driven by hooks in tmux.conf (see "Wrapping window list"); nothing to run by
+# hand. Windows with no @srow yet fall back to row 0, so a failure here can
+# never hide a window.
+
+set -u
+
+MAX_ROWS=5 # tmux draws at most 5 status lines
+SLACK=2    # columns held back for flag churn (zooming adds a "Z")
+
+path_helper="$(dirname "$0")/tmux-status-path"
+
+# Printable width of a rendered format: drop the #[...] style tags and count
+# characters, not bytes — the separators are multi-byte.
+width_of() {
+    printf '%s' "$1" | sed 's/#\[[^]]*\]//g' | LC_ALL=en_US.UTF-8 wc -m | tr -d ' '
+}
+
+for sid in $(tmux list-sessions -F '#{session_id}' 2>/dev/null); do
+    # Several clients can share a session at different sizes; the status bar
+    # is one layout, so lay it out for the narrowest of them.
+    width=$(tmux list-clients -t "$sid" -F '#{client_width}' 2>/dev/null | sort -n | head -1)
+    [ -n "$width" ] || continue # detached: nothing on screen to lay out
+
+    left=$(tmux display -t "$sid" -p '#{T:status-left}')
+    right=$(tmux display -t "$sid" -p '#{T:status-right}')
+    # display -p does not run #() jobs, so the location segment comes back
+    # empty; measure it directly and add it, unless it did make it in.
+    loc=$("$path_helper" "$(tmux display -t "$sid" -p '#{pane_current_path}')")
+    case $right in
+    *"$loc"*) ;;
+    *) right=$right$loc ;;
+    esac
+
+    # Only the first row pays for the session block and the clock.
+    first_avail=$((width - $(width_of "$left") - $(width_of "$right") - SLACK))
+    [ "$first_avail" -gt 0 ] || first_avail=$width
+
+    tmux list-windows -t "$sid" \
+        -F '#{window_index}|#{@srow}|#{?window_active,#{T:window-status-current-format},#{T:window-status-format}}' |
+        {
+            row=0
+            used=0
+            while IFS='|' read -r idx cur label; do
+                w=$(width_of "$label")
+                if [ "$row" -eq 0 ]; then avail=$first_avail; else avail=$width; fi
+                if [ "$used" -gt 0 ] &&
+                    [ $((used + w)) -gt "$avail" ] &&
+                    [ $((row + 1)) -lt "$MAX_ROWS" ]; then
+                    row=$((row + 1))
+                    used=0
+                fi
+                used=$((used + w))
+                # Only write on change: every set redraws the status bar, and
+                # automatic-rename fires this script often.
+                [ "$cur" = "$row" ] || tmux set -w -t "${sid}:${idx}" @srow "$row"
+            done
+
+            if [ "$row" -eq 0 ]; then rows=on; else rows=$((row + 1)); fi
+            [ "$(tmux show -t "$sid" -v status)" = "$rows" ] ||
+                tmux set -t "$sid" status "$rows"
+        }
+done

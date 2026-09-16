@@ -1,0 +1,68 @@
+#!/bin/sh
+# Render the tmux status-bar location segment for a given directory.
+#
+#   usage: tmux-status-path <dir> [session]
+#
+#   <worktree> ▸ <dir>   inside a git repo or worktree
+#   <worktree>           inside a git repo, at its root (no redundant repeat)
+#   <dir>                outside any git repo
+#
+# The worktree name is the basename of the checkout root, which is what
+# distinguishes one checkout of a repo from another worktree of the same repo
+# on a different branch. Without it, multiple worktrees show an identical name.
+#
+# The output carries its own colours so the location never reads as one more
+# window name: the worktree is cool blue, the directory warm and bold, both
+# unlike the greys of the window list. bin/tmux-status-wrap strips these tags
+# back off when it measures the segment.
+#
+# Given a session, this also nudges bin/tmux-status-wrap whenever the segment
+# changes width. Plain `cd` fires no tmux hook, so that nudge is the only thing
+# keeping the space reserved for the location on the first status line honest.
+
+set -u
+
+dir=${1:-}
+session=${2:-}
+[ -n "$dir" ] || exit 0
+
+# A pane whose cwd has been deleted still deserves a label, so fall back to the
+# basename of the path we were handed rather than printing nothing.
+cd "$dir" 2>/dev/null || { printf '%s\n' "${dir##*/}"; exit 0; }
+
+current=${PWD##*/}
+[ -n "$current" ] || current=/
+
+wt='#[fg=colour109]'
+dr='#[fg=colour223,bold]'
+sep='#[fg=colour240]'
+
+if root=$(git rev-parse --show-toplevel 2>/dev/null) && [ -n "$root" ]; then
+    worktree=${root##*/}
+    if [ "$worktree" = "$current" ]; then
+        plain=$worktree
+        styled="$dr$worktree#[nobold]"
+    else
+        plain="${worktree} ▸ ${current}"
+        styled="${wt}${worktree} ${sep}▸ ${dr}${current}#[nobold]"
+    fi
+else
+    plain=$current
+    styled="$dr$current#[nobold]"
+fi
+
+printf '%s\n' "$styled"
+
+# Re-flow the window list if the room this segment needs has changed. Only the
+# status bar passes a session; tmux-status-wrap calls us without one while it
+# measures, which is what stops the two from chasing each other.
+[ -n "$session" ] && [ -n "${TMUX:-}" ] || exit 0
+
+socket=${TMUX%%,*}
+tmux() { command tmux -S "$socket" "$@"; }
+
+width=$(printf '%s' "$plain" | LC_ALL=en_US.UTF-8 wc -m | tr -d ' ')
+[ "$(tmux show -t "$session" -v @sloc-width 2>/dev/null)" = "$width" ] && exit 0
+
+tmux set -t "$session" @sloc-width "$width" 2>/dev/null
+tmux run-shell -b "$(dirname "$0")/tmux-status-wrap" 2>/dev/null
