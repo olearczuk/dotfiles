@@ -1,0 +1,18 @@
+{
+  "effortLevel": "high",
+  "theme": "dark",
+  "feedbackDrafts": "off",
+  "skipWorkflowUsageWarning": true,
+  "agentPushNotifEnabled": true,
+  "skipAutoPermissionPrompt": true,
+  "statusLine": {
+    "type": "command",
+    "command": "python3 /home/olearczuk/.claude/statusline.py"
+  },
+  "permissions": {
+    "defaultMode": "auto",
+    "additionalDirectories": [
+      "/home/olearczuk/.claude"
+    ]
+  }
+}
