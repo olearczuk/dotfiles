@@ -20,7 +20,8 @@ alias gp='g push'
 alias gpf='gp --force'
 alias gpo='g pull origin'
 alias gcf='gc --fixup'
-
+alias gst='g stash'
+alias gstp='gst pop'
 
 export PATH="$HOME/.local/bin:$PATH"
 
