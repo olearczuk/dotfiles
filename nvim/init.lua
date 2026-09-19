@@ -258,6 +258,12 @@ require('lazy').setup({
           enable = true,
           update_cwd = false,
         },
+        filters = {
+          git_ignored = false,
+        },
+        renderer = {
+          highlight_git = 'all',
+        },
       }
       local api = require 'nvim-tree.api'
       vim.keymap.set('n', '<leader>t', api.tree.toggle, { desc = '[T]oggle nvim-tree' })
