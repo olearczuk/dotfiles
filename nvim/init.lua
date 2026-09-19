@@ -580,7 +580,6 @@ require('lazy').setup({
       --  - settings (table): Override the default settings passed when initializing the server.
       --        For example, to see the options for `lua_ls`, you could go to: https://luals.github.io/wiki/settings/
       local servers = {
-        -- clangd = {},
         -- gopls = {},
         -- pyright = {},
         -- ... etc. See `:help lspconfig-all` for a list of all the pre-configured LSPs
@@ -594,6 +593,11 @@ require('lazy').setup({
         --
 
         rust_analyzer = {},
+
+        clangd = {},
+
+        -- CMakeLists.txt editing support (hover/completion for cmake commands/variables)
+        cmake = {},
 
         pylsp = {},
 
@@ -626,6 +630,7 @@ require('lazy').setup({
       local ensure_installed = vim.tbl_keys(servers or {})
       vim.list_extend(ensure_installed, {
         'stylua', -- Used to format Lua code
+        'clang-format', -- Used to format C/C++ code
       })
       require('mason-tool-installer').setup { ensure_installed = ensure_installed }
 
@@ -663,7 +668,7 @@ require('lazy').setup({
         -- Disable "format_on_save lsp_fallback" for languages that don't
         -- have a well standardized coding style. You can add additional
         -- languages here or re-enable it for the disabled ones.
-        local disable_filetypes = { c = true, cpp = true }
+        local disable_filetypes = {}
         return {
           timeout_ms = 500,
           lsp_fallback = not disable_filetypes[vim.bo[bufnr].filetype],
@@ -671,6 +676,10 @@ require('lazy').setup({
       end,
       formatters_by_ft = {
         lua = { 'stylua' },
+        -- Formats according to a project's .clang-format if present, falling
+        -- back to clang-format's defaults otherwise.
+        c = { 'clang-format' },
+        cpp = { 'clang-format' },
         -- Conform can also run multiple formatters sequentially
         -- python = { "isort", "black" },
         --
@@ -847,7 +856,7 @@ require('lazy').setup({
     'nvim-treesitter/nvim-treesitter',
     build = ':TSUpdate',
     opts = {
-      ensure_installed = { 'bash', 'c', 'html', 'lua', 'luadoc', 'markdown', 'vim', 'vimdoc' },
+      ensure_installed = { 'bash', 'c', 'cmake', 'cpp', 'html', 'lua', 'luadoc', 'markdown', 'vim', 'vimdoc' },
       -- Autoinstall languages that are not installed
       auto_install = true,
       highlight = {
@@ -893,20 +902,115 @@ require('lazy').setup({
       'nvim-neotest/nvim-nio',
       'antoinemadec/FixCursorHold.nvim',
       'rouge8/neotest-rust',
+      'alfaix/neotest-gtest',
       -- { 'nvim-tree/nvim-web-devicons', enabled = vim.g.have_nerd_font },
     },
 
     config = function()
-      vim.keymap.set('n', '<leader>rt', '<cmd>:lua require("neotest").run.run()<cr>', { desc = '[R]un [T]est' })
-      vim.keymap.set('n', '<leader>rta', '<cmd>:lua require("neotest").run.run(vim.fn.expand("%"))<cr>', { desc = '[R]un [T]est for [A]ll' })
+      -- For C/C++ buffers, CMake doesn't rebuild before running a test the
+      -- way `cargo test` does, so do it ourselves: build (fast/no-op via
+      -- ninja if nothing changed) and only run the tests if it succeeds.
+      -- Other filetypes (e.g. Rust) skip straight to running tests.
+      local function run_tests(run_fn)
+        if vim.bo.filetype == 'c' or vim.bo.filetype == 'cpp' then
+          require('cmake-tools').build({}, function(result)
+            if result:is_ok() then
+              run_fn()
+            else
+              vim.notify('CMake build failed, not running tests', vim.log.levels.ERROR)
+            end
+          end)
+        else
+          run_fn()
+        end
+      end
 
-      require('neotest').setup {
-        adapters = {
-          require 'neotest-rust' {
-            args = { '--no-capture' },
-          },
+      vim.keymap.set('n', '<leader>rt', function()
+        run_tests(function()
+          require('neotest').run.run()
+        end)
+      end, { desc = '[R]un [T]est' })
+      vim.keymap.set('n', '<leader>rta', function()
+        local file = vim.fn.expand '%'
+        run_tests(function()
+          require('neotest').run.run(file)
+        end)
+      end, { desc = '[R]un [T]est for [A]ll' })
+      vim.keymap.set('n', '<leader>rs', '<cmd>:lua require("neotest").summary.toggle()<cr>', { desc = '[R]un [S]ummary' })
+
+      local adapters = {
+        require 'neotest-rust' {
+          args = { '--no-capture' },
         },
       }
+
+      -- GoogleTest adapter. Unlike Rust, it does not rebuild for you (run
+      -- `<leader>cmb` first) and each test's executable needs a one-time,
+      -- per-directory pointer to the compiled binary: open the summary
+      -- (`<leader>rs`), mark the test(s) with `m`, then press `C` (or run
+      -- `:ConfigureGtest`) and enter the executable path, e.g.
+      -- build/test/my_test. This is persisted on disk, so it's a
+      -- one-off per test executable, not per run.
+      --
+      -- Wrapped in pcall: on first install, or before the cpp/cmake
+      -- treesitter parsers have finished downloading, requiring this throws
+      -- and would otherwise take down neotest entirely (breaking Rust too).
+      -- Run `:TSInstall cpp cmake` and restart if this adapter stays missing.
+      local ok, gtest = pcall(function()
+        return require('neotest-gtest').setup {
+          mappings = { configure = 'C' },
+        }
+      end)
+      if ok then
+        table.insert(adapters, gtest)
+      else
+        vim.notify('neotest-gtest failed to load (cpp treesitter parser missing?): ' .. gtest, vim.log.levels.WARN)
+      end
+
+      require('neotest').setup {
+        summary = {
+          -- Relative to the current (code) window, not the whole screen, so
+          -- it lands just right of nvim-tree instead of jumping past it.
+          open = 'leftabove vsplit | vertical resize 50',
+        },
+        adapters = adapters,
+      }
+    end,
+  },
+  { -- CMake project support: configure/build/run + compile_commands.json for clangd
+    'Civitasv/cmake-tools.nvim',
+    dependencies = { 'nvim-lua/plenary.nvim' },
+    opts = {
+      cmake_generate_options = { '-DCMAKE_EXPORT_COMPILE_COMMANDS=1' },
+      cmake_compile_commands_options = {
+        -- Symlink build/compile_commands.json into the project root so
+        -- clangd picks it up without extra configuration.
+        action = 'soft_link',
+      },
+      cmake_runner = {
+        name = 'terminal',
+        opts = {
+          split_direction = 'vertical',
+          -- Overwritten right before each run in the <leader>cmr keymap
+          -- below with half of the *current window's* width, since this
+          -- static value has no access to that at setup time.
+          split_size = math.floor(vim.o.columns / 2),
+        },
+      },
+    },
+    config = function(_, opts)
+      require('cmake-tools').setup(opts)
+
+      vim.keymap.set('n', '<leader>cmg', '<cmd>CMakeGenerate<cr>', { desc = '[C]make [G]enerate' })
+      vim.keymap.set('n', '<leader>cmb', '<cmd>CMakeBuild<cr>', { desc = '[C]make [B]uild' })
+      vim.keymap.set('n', '<leader>cmr', function()
+        require('cmake-tools.const').cmake_runner.opts.split_size = math.floor(vim.api.nvim_win_get_width(0) / 2)
+        vim.cmd 'CMakeRun'
+      end, { desc = '[C]make [R]un' })
+      -- CMakeRun reuses whatever launch target you picked last (resets only
+      -- on nvim restart). Use this to switch targets without restarting.
+      vim.keymap.set('n', '<leader>cml', '<cmd>CMakeSelectLaunchTarget<cr>', { desc = '[C]make Select [L]aunch Target' })
+      vim.keymap.set('n', '<leader>cmt', '<cmd>CMakeSelectBuildType<cr>', { desc = '[C]make Build [T]ype' })
     end,
   },
   {
